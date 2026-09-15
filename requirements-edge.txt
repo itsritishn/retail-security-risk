@@ -1,0 +1,15 @@
+# Optional dependencies for real pose inference on the edge tier.
+#
+# The default `synthetic` backend needs none of this. Install only when you are ready to
+# run inference over actual video, and read docs/04-dpia-privacy.md first regarding which
+# footage you are permitted to use.
+#
+#   NEVER point this at your employer's CCTV without written authorisation from the
+#   data controller. Use PoseLift, UCF-Crime, DCSASS, or footage you recorded yourself
+#   with the informed consent of everyone in frame.
+
+-r requirements.txt
+
+numpy==2.2.1
+opencv-python-headless==4.10.0.84
+ultralytics==8.3.58

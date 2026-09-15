@@ -1,0 +1,44 @@
+# Secrets and local config
+.env
+*.pem
+*.key
+secrets/
+
+# Database
+*.db
+*.db-journal
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ML weights (large, and not ours to redistribute)
+*.pt
+*.onnx
+weights/
+
+# NEVER commit footage. Store CCTV is your employer's data and the customers' personal data.
+# Research datasets have their own licences and are not ours to vendor into a repo.
+data/
+media/
+*.mp4
+*.avi
+*.mkv
+*.mov
+clips/
+
+# Local reports
+reports/*.html
+reports/*.csv
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,46 @@
+[project]
+name = "sentinelfloor"
+version = "0.1.0"
+description = "Privacy-first, behaviour-based loss prevention and staff duress platform for small-format retail"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = [
+    "error::DeprecationWarning:core.*",
+    "error::DeprecationWarning:edge.*",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # bugbear
+    "S",    # bandit: security lints
+    "UP",   # pyupgrade
+    "SIM",  # simplify
+    "ANN",  # annotations
+]
+ignore = [
+    "ANN101",  # missing type annotation for self
+    "ANN102",  # missing type annotation for cls
+    "ANN401",  # dynamically typed *args/**kwargs
+    "B008",    # function call in default argument: this is how FastAPI Depends works
+    "E501",    # line length handled by the formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests legitimately use asserts, hardcoded test credentials, and untyped helpers.
+"tests/*" = ["S101", "S105", "S106", "ANN"]
+"scripts/*" = ["S310", "ANN"]
+# urllib with a configured base URL, not attacker-controlled.
+"edge/publisher.py" = ["S310"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["core", "edge", "analytics", "scripts"]

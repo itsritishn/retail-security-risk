@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Shop floor — {{ product_name }}{% endblock %}
+
+{% block head %}
+  {# Read by app.js and echoed in the X-SF-CSRF header on every state change. #}
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <meta name="user-role" content="{{ user.role }}">
+{% endblock %}
+
+{% block body %}
+<header class="topbar">
+  <div class="topbar-brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <div>
+      <span class="brand-name">{{ product_name }}</span>
+      <span class="brand-store">{{ user.store.name if user.store else 'Unknown store' }}</span>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <span id="connection-state" class="conn conn-pending" role="status">Connecting…</span>
+    <span class="whoami">
+      {{ user.display_name }}
+      <span class="role-chip">{{ user.role.replace('_', ' ') }}</span>
+    </span>
+    <form method="post" action="/logout" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-quiet">Sign out</button>
+    </form>
+  </div>
+</header>
+
+{#
+  Duress banner. Assertive because it must interrupt whatever the member of staff is
+  reading. This is the one place in the interface where interrupting is correct.
+#}
+<div id="duress-banner" class="duress-banner" role="alert" aria-live="assertive" hidden></div>
+
+<main id="main" class="layout">
+
+  <section class="panel" aria-labelledby="queue-heading">
+    <div class="panel-head">
+      <h1 id="queue-heading" class="panel-title">Alert queue</h1>
+      <div class="counters" aria-live="polite">
+        <span class="counter counter-open"><b id="count-open">0</b> open</span>
+        <span class="counter"><b id="count-ack">0</b> acknowledged</span>
+        <span class="counter"><b id="count-resolved">0</b> resolved</span>
+      </div>
+    </div>
+
+    <p class="panel-note">
+      Prompts are advisory. Assess the situation yourself before acting, never confront
+      anyone, and record what actually happened so the detection can be improved.
+    </p>
+
+    {# Polite: new alerts are announced without cutting off the current utterance. #}
+    <ul id="alert-list" class="alert-list" aria-live="polite" aria-relevant="additions">
+      <li class="empty-state" id="alert-empty">No open prompts. Floor is clear.</li>
+    </ul>
+  </section>
+
+  <aside class="sidebar">
+
+    {% if is_operational %}
+    <section class="panel panel-duress" aria-labelledby="duress-heading">
+      <h2 id="duress-heading" class="panel-title">Raise the alarm</h2>
+      <p class="panel-note">
+        Alerts go silently to the team and the duty manager. Do not confront anyone.
+      </p>
+
+      <div class="duress-buttons" id="duress-buttons">
+        <button type="button" class="btn btn-danger" data-duress-kind="threat">
+          Threat to a person
+        </button>
+        <button type="button" class="btn btn-warn" data-duress-kind="theft_in_progress">
+          Theft in progress
+        </button>
+        <button type="button" class="btn btn-info" data-duress-kind="medical">
+          Medical emergency
+        </button>
+        <button type="button" class="btn btn-quiet" data-duress-kind="test">
+          Test the alarm
+        </button>
+      </div>
+
+      {% if public_broadcast_enabled %}
+        <p class="warn-note">
+          Store-wide public announcement is enabled in configuration. It is restricted to
+          threat-to-person activations.
+        </p>
+      {% else %}
+        <p class="panel-footnote">
+          Store-wide public announcement is disabled. A loud alarm escalates confrontation
+          and puts staff at risk, so alerting is silent by default.
+        </p>
+      {% endif %}
+
+      <div id="duress-active" class="duress-active" hidden>
+        <h3 class="subheading">Active incidents</h3>
+        <ul id="duress-list" class="duress-list"></ul>
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="panel" aria-labelledby="cameras-heading">
+      <h2 id="cameras-heading" class="panel-title">Camera coverage</h2>
+      <p class="panel-note">
+        A camera that stops reporting leaves an aisle uncovered. Silence is treated as a
+        fault, not as an absence of activity.
+      </p>
+      <ul id="camera-list" class="camera-list">
+        <li class="empty-state">Loading…</li>
+      </ul>
+    </section>
+
+    {% if can_view_analytics %}
+    <section class="panel" aria-labelledby="insight-heading">
+      <h2 id="insight-heading" class="panel-title">Detection quality</h2>
+      <dl class="stat-grid" id="quality-stats">
+        <div class="stat">
+          <dt>Precision</dt>
+          <dd id="stat-precision">—</dd>
+        </div>
+        <div class="stat">
+          <dt>Median response</dt>
+          <dd id="stat-response">—</dd>
+        </div>
+        <div class="stat">
+          <dt>False positives</dt>
+          <dd id="stat-fp">—</dd>
+        </div>
+        <div class="stat">
+          <dt>Unattended</dt>
+          <dd id="stat-unattended">—</dd>
+        </div>
+      </dl>
+      <p class="panel-footnote">
+        Recall is not shown because it cannot be measured: we have no record of thefts
+        nobody saw. Compare confirmed recoveries against stocktake shrinkage instead.
+      </p>
+
+      <h3 class="subheading">Where to stand</h3>
+      <ul id="staffing-list" class="staffing-list">
+        <li class="empty-state">Not enough history yet.</li>
+      </ul>
+    </section>
+    {% endif %}
+
+  </aside>
+</main>
+
+{# Disposition dialog. Native <dialog> gives focus trapping and Escape handling free. #}
+<dialog id="resolve-dialog" class="dialog" aria-labelledby="resolve-title">
+  <form id="resolve-form" method="dialog">
+    <h2 id="resolve-title" class="dialog-title">What happened?</h2>
+    <p class="dialog-note" id="resolve-context"></p>
+
+    <div class="field">
+      <label for="disposition">Outcome</label>
+      <select id="disposition" name="disposition" required>
+        <option value="true_positive_recovered">Genuine, stock recovered</option>
+        <option value="true_positive_lost">Genuine, stock left the store</option>
+        <option value="false_positive">Not a concern, nothing happened</option>
+        <option value="unclear">Could not tell</option>
+        <option value="not_attended">Could not get there in time</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="resolve-note">
+        Notes <span id="note-required" class="required-hint" hidden>(required)</span>
+      </label>
+      <textarea id="resolve-note" name="note" rows="3" maxlength="500"
+        placeholder="What did you see? Helps tune the detection."></textarea>
+    </div>
+
+    <p id="resolve-error" class="form-error" role="alert" hidden></p>
+
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-quiet" id="resolve-cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="resolve-submit">Save outcome</button>
+    </div>
+  </form>
+</dialog>
+
+<template id="alert-template">
+  <li class="alert-card" tabindex="-1">
+    <div class="alert-main">
+      <div class="alert-head">
+        <span class="sev-chip"></span>
+        <h3 class="alert-headline"></h3>
+      </div>
+      <p class="alert-meta"></p>
+      <details class="alert-why">
+        <summary>Why was this raised?</summary>
+        <ul class="reason-list"></ul>
+        <p class="alert-disclaimer">
+          A behavioural signal, not an accusation. No identity or facial data is used.
+        </p>
+      </details>
+    </div>
+    <div class="alert-actions">
+      <button type="button" class="btn btn-primary btn-ack">Acknowledge</button>
+      <button type="button" class="btn btn-quiet btn-resolve">Record outcome</button>
+    </div>
+  </li>
+</template>
+
+<script src="/static/app.js"></script>
+{% endblock %}

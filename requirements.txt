@@ -1,0 +1,15 @@
+# Core service dependencies.
+# Pinned deliberately: an unpinned range in a security project is a supply-chain finding.
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.36
+pydantic==2.10.4
+pydantic-settings==2.7.0
+jinja2==3.1.5
+python-multipart==0.0.20
+PyJWT==2.10.1
+PyYAML==6.0.2
+httpx==0.28.1
+
+# Test and tooling
+pytest==8.3.4

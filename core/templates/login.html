@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Sign in — {{ product_name }}{% endblock %}
+
+{% block body %}
+<main id="main" class="auth-shell">
+  <div class="auth-card">
+    <h1 class="auth-title">{{ product_name }}</h1>
+    <p class="auth-subtitle">Shop-floor safety and loss prevention</p>
+
+    {#
+      Errors are announced to assistive technology as soon as they render. A member of
+      staff using a screen reader should not have to hunt for why sign-in failed.
+    #}
+    {% if error %}
+      <div class="alert-banner" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/login" class="auth-form" autocomplete="on">
+      <div class="field">
+        <label for="username">Staff username</label>
+        <input
+          id="username"
+          name="username"
+          type="text"
+          required
+          autocomplete="username"
+          autocapitalize="none"
+          spellcheck="false"
+          maxlength="64"
+          {% if error %}aria-invalid="true"{% endif %}>
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          required
+          autocomplete="current-password"
+          maxlength="200"
+          {% if error %}aria-invalid="true"{% endif %}>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+    </form>
+
+    <p class="auth-footnote">
+      This system monitors movement patterns only. It does not use facial recognition and
+      does not identify customers.
+    </p>
+  </div>
+</main>
+{% endblock %}

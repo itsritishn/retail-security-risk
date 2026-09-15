@@ -1,0 +1,242 @@
+"""Replay a synthetic shift through the full pipeline.
+
+    python -m scripts.demo_replay                  # all cameras, publish to the core
+    python -m scripts.demo_replay --realtime       # paced, for watching the dashboard live
+    python -m scripts.demo_replay --with-outcomes  # also fill in staff dispositions
+
+``--with-outcomes`` writes plausible dispositions so the analytics endpoints have something
+to work with. It does so through the same audit-recorded path a member of staff would use,
+attributed to ``demo-script`` rather than to a real user, because falsifying an audit trail
+to make a demo look tidy would undermine the one property the audit log exists to provide.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import random
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+from core.config import BASE_DIR
+
+CREDENTIALS_PATH = BASE_DIR / "secrets" / "edge_credentials.json"
+CONFIG_PATH = BASE_DIR / "edge" / "config.yaml"
+
+
+def core_is_up(core_url: str) -> bool:
+    try:
+        with urllib.request.urlopen(f"{core_url.rstrip('/')}/healthz", timeout=3) as response:
+            return response.status == 200
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return False
+
+
+def apply_outcomes(*, seed: int = 20260912) -> dict:
+    """Record dispositions against open alerts so analytics have real inputs.
+
+    The mix is intentionally unflattering. A first-pass rule-based detector in a real store
+    produces a meaningful share of false positives, and a demo that shows 95% precision
+    teaches the wrong lesson about what to expect.
+    """
+    from sqlalchemy import select
+
+    from core import audit
+    from core.db import session_scope
+    from core.models import Alert, AlertStatus, Disposition, Store
+    from core.util import utcnow
+
+    rng = random.Random(seed)
+
+    # Weighted toward realistic outcomes, including a solid block of false positives.
+    outcomes = (
+        (Disposition.TRUE_POSITIVE_RECOVERED.value, 0.22),
+        (Disposition.TRUE_POSITIVE_LOST.value, 0.14),
+        (Disposition.FALSE_POSITIVE.value, 0.40),
+        (Disposition.UNCLEAR.value, 0.16),
+        (Disposition.NOT_ATTENDED.value, 0.08),
+    )
+    labels = [value for value, _ in outcomes]
+    weights = [weight for _, weight in outcomes]
+
+    notes = {
+        Disposition.FALSE_POSITIVE.value: [
+            "Customer was putting a basket down, hand went to their side.",
+            "Was adjusting a coat, nothing taken.",
+            "Staff member restocking the shelf.",
+            "Put the item back on the next shelf down, camera angle hid it.",
+            "Parent putting shopping into a pushchair.",
+        ],
+        Disposition.UNCLEAR.value: [
+            "Aisle too busy to see clearly.",
+            "Left before I could get across.",
+        ],
+        Disposition.TRUE_POSITIVE_RECOVERED.value: [
+            "Offered a basket, item was returned to the shelf.",
+            "Approached politely, they put it back and left.",
+        ],
+        Disposition.TRUE_POSITIVE_LOST.value: [
+            "Left through the front before anyone was free.",
+            "Confirmed on the shelf gap afterwards.",
+        ],
+        Disposition.NOT_ATTENDED.value: [
+            "Single-crewed on the till, could not leave.",
+        ],
+    }
+
+    summary = {"resolved": 0, "by_disposition": {}}
+
+    with session_scope() as session:
+        store = session.execute(select(Store)).scalars().first()
+        if store is None:
+            return {"error": "no store found, run `python -m core.seed` first"}
+
+        alerts = session.execute(
+            select(Alert).where(
+                Alert.store_id == store.id,
+                Alert.status != AlertStatus.RESOLVED.value,
+            )
+        ).scalars().all()
+
+        for alert in alerts:
+            # Leave roughly one in six open, so the dashboard has a live queue to work.
+            if rng.random() < 0.16:
+                continue
+
+            disposition = rng.choices(labels, weights=weights, k=1)[0]
+            note = rng.choice(notes.get(disposition, [""]))
+
+            now = utcnow()
+            alert.status = AlertStatus.RESOLVED.value
+            alert.acknowledged_at = alert.acknowledged_at or now
+            alert.resolved_at = now
+            alert.disposition = disposition
+            alert.disposition_note = note or None
+            session.add(alert)
+
+            audit.record(
+                session,
+                store_id=store.id,
+                actor_type="system",
+                actor_ref="demo-script",
+                action="alert.resolved",
+                target_type="alert",
+                target_ref=str(alert.id),
+                detail={
+                    "disposition": disposition,
+                    "synthetic": True,
+                    "note": "generated by scripts.demo_replay for demonstration",
+                },
+            )
+
+            summary["resolved"] += 1
+            summary["by_disposition"][disposition] = (
+                summary["by_disposition"].get(disposition, 0) + 1
+            )
+
+    return summary
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="scripts.demo_replay",
+        description="Replay a synthetic shift through the SentinelFloor pipeline.",
+    )
+    parser.add_argument("--camera", help="Run one camera only")
+    parser.add_argument("--realtime", action="store_true", help="Pace against wall clock")
+    parser.add_argument("--frames", type=int, help="Frame cap per camera")
+    parser.add_argument(
+        "--with-outcomes",
+        action="store_true",
+        help="Record synthetic staff dispositions so analytics have inputs",
+    )
+    parser.add_argument("--seed", type=int, default=20260912)
+    args = parser.parse_args(argv)
+
+    import yaml
+
+    from edge.run import build_pipeline_config, load_config, load_credentials
+    from edge.pipeline import EdgePipeline
+
+    config = load_config(CONFIG_PATH)
+    core_url = str(config.get("core_url", "http://127.0.0.1:8000"))
+
+    if not core_is_up(core_url):
+        print(f"\nThe core service is not reachable at {core_url}")
+        print("Start it in another terminal:\n    ./scripts/dev.sh serve\n")
+        return 1
+
+    if not CREDENTIALS_PATH.exists():
+        print("\nCamera ingest keys are missing. Run:\n    ./scripts/dev.sh seed\n")
+        return 1
+
+    credentials = load_credentials(CREDENTIALS_PATH)
+
+    if args.camera:
+        camera_codes = [args.camera]
+    else:
+        camera_codes = [
+            str(entry["camera_code"])
+            for entry in (config.get("cameras") or [])
+            if entry.get("camera_code") and entry["camera_code"] in credentials
+        ]
+
+    if not camera_codes:
+        print("No cameras available. Run `./scripts/dev.sh seed`.")
+        return 1
+
+    print(f"\nReplaying a synthetic shift across {len(camera_codes)} camera(s)")
+    print("Pose data only. No real footage is used anywhere in this demo.\n")
+
+    totals = {"events": 0, "alerts": 0, "tracks": 0}
+
+    for index, camera_code in enumerate(camera_codes):
+        pipeline_config = build_pipeline_config(
+            config, credentials, camera_code, dry_run=False
+        )
+        options = dict(pipeline_config["backend_options"])
+        options["seed"] = args.seed + index * 977
+        pipeline_config["backend_options"] = options
+
+        pipeline = EdgePipeline.from_config(pipeline_config)
+        stats = pipeline.run(realtime=args.realtime, frame_limit=args.frames)
+
+        totals["events"] += stats.events_published
+        totals["alerts"] += stats.alerts_raised
+        totals["tracks"] += stats.tracks_created
+
+        print(
+            f"  {camera_code:<16} tracks={stats.tracks_created:<4} "
+            f"events={stats.events_published:<4} alerts={stats.alerts_raised}"
+        )
+
+    print("\n" + "=" * 60)
+    print(f"  tracks observed  : {totals['tracks']}")
+    print(f"  events published : {totals['events']}")
+    print(f"  alerts raised    : {totals['alerts']}")
+    print("=" * 60)
+
+    if args.with_outcomes:
+        print("\nRecording synthetic dispositions...")
+        summary = apply_outcomes(seed=args.seed)
+        if "error" in summary:
+            print(f"  {summary['error']}")
+        else:
+            print(f"  resolved {summary['resolved']} alerts")
+            for disposition, count in sorted(summary["by_disposition"].items()):
+                print(f"    {disposition:<28} {count}")
+            print(
+                "\n  Note the false-positive share. That is deliberate: it is what a "
+                "first-pass\n  rule-based detector actually produces, and it is the number "
+                "that decides\n  whether staff keep using the tool."
+            )
+
+    print("\nOpen http://127.0.0.1:8000 to work the queue.")
+    print("Analytics: /api/v1/analytics/detection-quality and /threshold-sweep\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
