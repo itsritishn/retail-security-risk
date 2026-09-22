@@ -133,6 +133,8 @@ Read in this order:
 6. `docs/06-evaluation-plan.md` — how detection quality and fairness are measured
 7. `docs/07-roadmap.md` — 12-week delivery plan
 8. `docs/08-cv-and-interview-framing.md` — how to talk about this work
+9. `docs/12-secrets-incident.md` — incident report: secrets committed via a SQLite WAL sidecar,
+   found in a self-audit of this repository, with root cause, rotation, and prevention
 
 `PITCH.md` is the one-page summary for a non-technical audience.
 
