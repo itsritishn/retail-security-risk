@@ -5,9 +5,18 @@
 secrets/
 
 # Database
+#
+# The -wal and -shm sidecars matter as much as the .db file and are easy to miss. SQLite in
+# WAL mode writes real database pages into the write-ahead log, so a committed .db-wal can
+# contain password hashes, camera ingest keys, and duress secrets even when the .db itself is
+# ignored. This was a genuine finding in this repository: see docs/12-secrets-incident.md.
 *.db
+*.db-wal
+*.db-shm
 *.db-journal
 *.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 
 # Python
 __pycache__/
