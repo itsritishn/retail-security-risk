@@ -46,8 +46,19 @@ class HubStats:
         }
 
 
-@dataclass
+@dataclass(eq=False)
 class Subscriber:
+    """One connected dashboard.
+
+    ``eq=False`` is load-bearing, not stylistic. A plain ``@dataclass`` generates
+    ``__eq__``, which causes Python to set ``__hash__ = None``, and subscribers are held in
+    a ``set``. Without this the first WebSocket connection raises
+    ``TypeError: unhashable type``.
+
+    Identity semantics are also the correct semantics here: two connections from the same
+    user on two devices are two distinct subscribers and both must receive alerts.
+    """
+
     websocket: WebSocket
     store_id: int
     role: str
