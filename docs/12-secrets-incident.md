@@ -1,6 +1,8 @@
 # 12. Incident report: secrets committed to git history
 
-**Status:** contained and remediated. One optional action outstanding (history rewrite).
+**Status:** Closed. Secrets rotated, history rewritten, clean state verified. One residual noted
+in section 5a: GitHub still serves the pre-rewrite commit by direct SHA, which is harmless
+because the credentials it contains are dead.
 **Severity:** Low actual, Medium-high had this been a real deployment.
 **Found:** during a post-build repository audit, by inspecting what git was actually tracking
 rather than trusting the `.gitignore`.
@@ -111,28 +113,69 @@ into an actual leak.
 Because the leaked credentials are dead, the exposure is contained even though the blob is
 still present in history.
 
-### Outstanding, optional
+### 5. History rewritten and force pushed — completed
 
-**Purge the blob from history.** The old secrets remain reachable in commits `c1ff960` and
-`e1b8587`. They are worthless now, but a reviewer running `git log --stat` will see a committed
-database, which is a bad look for a security portfolio.
-
-This requires rewriting published history and force-pushing, which is destructive. It is safe
-here only because the repository has a single author and no collaborators.
+A backup bundle of the pre-rewrite state was taken first
+(`git bundle create ... --all`), then history was rewritten to remove both sidecars from every
+commit:
 
 ```bash
-# Preferred: git-filter-repo (install with: brew install git-filter-repo)
-git filter-repo --invert-paths \
-  --path sentinelfloor.db-wal \
-  --path sentinelfloor.db-shm
+FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --index-filter \
+  'git rm --cached --ignore-unmatch -q sentinelfloor.db-wal sentinelfloor.db-shm' \
+  --prune-empty -- main
 
+rm -rf .git/refs/original
+git reflog expire --expire=now --all
+git gc --prune=now
 git push --force-with-lease origin main
 ```
 
-`--force-with-lease` rather than `--force`, so the push aborts if the remote moved unexpectedly.
+`git filter-branch` rather than the recommended `git filter-repo`, because the latter was not
+installed and this repository is trivial for the purpose: six commits, one branch, no tags, no
+submodules. `--force-with-lease` rather than `--force`, so the push aborts if the remote moved
+unexpectedly.
 
-If there were ever real collaborators, every one of them would need to re-clone, because their
-local histories would diverge irreconcilably.
+Scoped to `-- main` rather than `-- --all` deliberately. Rewriting `refs/remotes/origin/main`
+too would have made `--force-with-lease` compare against an already-rewritten value, defeating
+the safety check.
+
+**Verified after the rewrite:**
+
+| Check | Result |
+|---|---|
+| Commits preserved | 6 of 6 |
+| Objects named `db-wal` / `db-shm` anywhere | 0 |
+| Blobs containing the `pbkdf2_sha256$600000$` hash format | 0 |
+| Original blob SHAs still present locally | purged |
+| Working tree, `.env`, `secrets/`, database | intact |
+| Test suite | 188 passing |
+| Fresh clone from GitHub | 75 files, 6 commits, no database, no secrets |
+
+## 5a. Residual: GitHub retains the unreferenced commit
+
+Confirmed by probing from a clean clone: the pre-rewrite commit is **still retrievable from
+GitHub by direct SHA**, even though it is reachable from no ref and absent from any clone.
+
+```bash
+git fetch origin c1ff960916ed8c50aed800b4ddb9a885d95cbcc1   # still succeeds
+```
+
+This is expected GitHub behaviour. Force pushing removes the ref; it does not garbage collect
+the objects, and GitHub keeps unreferenced commits accessible for an unspecified period.
+
+**Why this does not matter here:** every leaked credential was rotated before the rewrite, and
+the rotation was verified against every blob in history. Anyone retrieving that commit obtains
+dead camera keys, dead fob secrets, and hashes of passwords that no longer exist.
+
+**If complete removal is required**, two options:
+
+1. Ask GitHub Support to run garbage collection on the repository. This is the documented route.
+2. Delete the repository and push a fresh one. Fastest and most certain for a small repo with no
+   stars, forks, issues, or external references. Loses nothing but the creation date.
+
+Recorded rather than quietly omitted, because "we force pushed so it is gone" is a common and
+incorrect assumption, and the gap between removing a reference and removing data is exactly the
+kind of thing this report exists to capture.
 
 ---
 
