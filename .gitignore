@@ -47,6 +47,10 @@ clips/
 reports/*.html
 reports/*.csv
 
+# Personal career notes. Kept locally, not published: a hiring manager reading your prepared
+# answer to their own question makes the answer read as coached, and it names a current employer.
+docs/08-cv-and-interview-framing.md
+
 # OS / editor
 .DS_Store
 .idea/

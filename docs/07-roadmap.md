@@ -122,7 +122,7 @@ Everything here needs written authorisation and is not a solo activity.
 
 - Approach the store manager with [`PITCH.md`](../PITCH.md). Ask about a supervised trial on one
   camera in one aisle, outside trading hours to begin with.
-- The manager will escalate. A Tesco-owned symbol group has central information security,
+- The manager will escalate. A symbol group owned by a large grocer has central information security,
   data protection, and loss prevention functions, and all three would need to be involved. Expect
   a long process, and treat that as the point rather than an obstacle: **navigating an approval
   process is itself the experience worth having.**

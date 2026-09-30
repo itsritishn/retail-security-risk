@@ -33,8 +33,15 @@ When it sees that, it puts a short prompt on the shop-floor screen or a staff ph
 A member of staff looks, decides, and acts. Usually that means walking over and offering a
 basket, which is the single most effective and least confrontational thing anyone can do.
 
-It also has a **panic button** for staff. Press it and the team and duty manager are alerted
-silently, with a coded announcement if needed. Nobody is told to confront anybody.
+It also has a **staff alert button**. Press it and the whole team and the duty manager know
+immediately what is happening and where, with a coded announcement if needed. Nobody is told to
+confront anybody.
+
+**This does not replace your monitored alarm.** The existing hold-up button that reaches the
+alarm centre and the police stays exactly as it is, pressed and verified by people. This system
+never contacts the emergency services. What it adds is the part the existing alarm cannot do:
+making sure your colleagues on the other side of the shop know what is going on, and keeping a
+record you can review afterwards.
 
 ---
 

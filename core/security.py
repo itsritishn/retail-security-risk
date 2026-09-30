@@ -115,7 +115,9 @@ def password_policy_errors(password: str) -> list[str]:
     if len(password) > 200:
         problems.append("Keep it under 200 characters.")
     lowered = password.lower()
-    for banned in ("password", "sentinel", "onestop", "tesco", "123456", "qwerty", "letmein"):
+    # Contextual terms belong on this list too: staff pick passwords based on where they work.
+    # A real deployment should add the actual store and company name here.
+    for banned in ("password", "sentinel", "northgate", "store", "123456", "qwerty", "letmein"):
         if banned in lowered:
             problems.append(f"Must not contain the common term {banned!r}.")
             break

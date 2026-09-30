@@ -81,7 +81,7 @@ def test_password_policy_is_length_first():
     assert password_policy_errors("short") != []
     assert password_policy_errors("a-perfectly-fine-long-passphrase") == []
     assert password_policy_errors("password123456789") != []
-    assert password_policy_errors("onestop-store-login") != []
+    assert password_policy_errors("northgate-store-login") != []
     assert password_policy_errors(" leading-space-passphrase") != []
 
 

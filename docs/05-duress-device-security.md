@@ -1,8 +1,51 @@
 # 5. Duress device security design
 
-The panic button is the only life-safety function in this system. If detection fails, stock
-goes missing. If duress fails, somebody gets hurt. It is therefore specified in more detail
-than anything else here.
+The duress function is the only life-safety path in this system. If detection fails, stock goes
+missing. If duress fails, somebody gets hurt. It is therefore specified in more detail than
+anything else here.
+
+---
+
+## Scope: this system does not contact the emergency services
+
+**Most UK convenience stores already have a monitored alarm.** A hold-up button signals an Alarm
+Receiving Centre, an operator there verifies the situation (often through two-way audio over an
+in-store speaker), and that operator contacts police or fire. That path is certified, regulated,
+and depends on a police-issued reference number for the premises.
+
+SentinelFloor **does not replicate, replace, bypass, or trigger that path.** Three reasons, and
+they are not negotiable:
+
+1. **It is safety-critical and certified.** Reimplementing it as a side project would be
+   reckless, and a bug would mean a real emergency call that never arrives.
+2. **False alarms have consequences for the store.** Police can withdraw response from premises
+   that generate too many. A defect in this software could therefore cost a shop its police
+   response, which is a far worse outcome than the theft it was trying to prevent.
+3. **An automated emergency call on a behavioural guess is indefensible.** The detector cannot
+   see the item in someone's hand. Dispatching police on a 70%-confident inference about a wrist
+   position is not a decision software should make.
+
+So there is no integration with any Alarm Receiving Centre, no emergency dialler, and no code
+path to either. The existing button stays exactly as it is: pressed by a human, verified by a
+human, escalated by a human.
+
+### What is left, and why it is still worth building
+
+The existing alarm signals **outwards**. It does not coordinate **inwards**. When that button is
+pressed in a store with three people on shift:
+
+- The other colleagues usually do not know what happened, or where in the shop it happened.
+- Nothing is recorded in a form anyone can review afterwards.
+- It is not connected to anything the cameras observed at the time.
+
+That internal gap is what this subsystem addresses: telling the team what is happening and
+where, recording it in the tamper-evident audit log, and linking it to detection events. Where
+emergency services are genuinely needed, the guidance shown to staff tells them to use the
+existing alarm and to call 999. The software prompts a person; it never acts.
+
+This is a narrower claim than the original concept, and a more defensible one. It was corrected
+after establishing that the reference store already had a monitored alarm — which is a good
+argument for asking what is already installed before designing a replacement for it.
 
 ---
 

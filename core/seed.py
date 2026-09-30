@@ -30,8 +30,11 @@ from core.util import new_secret
 
 SECRETS_DIR = BASE_DIR / "secrets"
 
-STORE_REFERENCE = "ONESTOP-DEMO-001"
-STORE_NAME = "One Stop (demo store)"
+# Deliberately a fictional store. The reference deployment is a real shop, but naming an actual
+# retailer in a public repository would imply an endorsement that does not exist, and would tie
+# a named business to a discussion of its security gaps.
+STORE_REFERENCE = "NORTHGATE-DEMO-001"
+STORE_NAME = "Northgate Convenience (demo store)"
 
 #: Zone risk weights encode shop-floor knowledge. These are the lines that actually walk
 #: out of a UK convenience store: confectionery, chilled dairy, alcohol, and health and
